@@ -1,12 +1,13 @@
 /**
  * pi-search-extension — protocol-only entry point.
  *
- * Registers the pi-search-extension node on the protocol fabric so callers
- * can invoke provides through the shared protocol gateway.
+ * Registers the pi-search-extension node on the protocol fabric so callers can
+ * invoke provides through the shared protocol gateway instead of
+ * individual Pi tools.
  *
- * Bootstraps @kyvernitria/pi-protocol-minimal if not already available,
- * installing it into ~/.pi/agent/node_modules/ so ALL future extensions
- * find it without duplication.
+ * Bootstrap ensures @kyvernitria/pi-protocol-minimal is available for ALL
+ * pi-protocol certified extensions by installing into the shared
+ * ~/.pi/agent/node_modules/@kyvernitria/ location on first load.
  */
 
 import { createRequire } from "node:module";
@@ -26,15 +27,21 @@ function ensureProtocolMinimal(): void {
     _require.resolve("@kyvernitria/pi-protocol-minimal");
   } catch {
     const targetDir = join(homedir(), ".pi", "agent", "node_modules", "@kyvernitria");
-    const source = join(homedir(), "Applications", "pi", "pi-protocol", "packages", "pi-protocol-minimal");
-    if (existsSync(source)) {
+    const target = join(targetDir, "pi-protocol-minimal");
+
+    const localRepo = join(homedir(), "Applications", "pi", "pi-protocol", "packages", "pi-protocol-minimal");
+    if (existsSync(localRepo)) {
       mkdirSync(targetDir, { recursive: true });
-      symlinkSync(source, join(targetDir, "pi-protocol-minimal"), "dir");
-    } else {
-      const { execSync } = _require("node:child_process");
-      mkdirSync(targetDir, { recursive: true });
-      execSync("npm install @kyvernitria/pi-protocol-minimal", { cwd: join(homedir(), ".pi", "agent"), stdio: "pipe" });
+      symlinkSync(localRepo, target, "dir");
+      return;
     }
+
+    const { execSync } = _require("node:child_process");
+    mkdirSync(targetDir, { recursive: true });
+    execSync("npm install @kyvernitria/pi-protocol-minimal@latest", {
+      cwd: join(homedir(), ".pi", "agent"),
+      stdio: "pipe",
+    });
   }
 }
 

@@ -33,11 +33,6 @@
     "@earendil-works/pi-coding-agent": "*",
     "typebox": "*"
   },
-  "peerDependenciesMeta": {
-    "@kyvernitria/pi-protocol-minimal": {
-      "optional": true
-    }
-  },
   "devDependencies": {
     "@earendil-works/pi-coding-agent": "*",
     "@types/node": "^26.0.1",
@@ -58,10 +53,5 @@
     "skills",
     "pi.protocol.json",
     "README.md"
-  ],
-  "peerDependenciesMeta": {
-    "@kyvernitria/pi-protocol-minimal": {
-      "optional": true
-    }
-  }
+  ]
 }
