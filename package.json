@@ -1,0 +1,67 @@
+{
+  "name": "pi-search-extension",
+  "version": "0.1.0",
+  "description": "Pi extension for web search, content extraction, code/docs search, and structured research workflows.",
+  "type": "module",
+  "main": "./extension.ts",
+  "exports": {
+    ".": "./extension.ts",
+    "./tools": "./src/tools.ts",
+    "./protocol/handlers": "./protocol/handlers.ts",
+    "./pi.protocol.json": "./pi.protocol.json"
+  },
+  "keywords": [
+    "pi-package",
+    "pi",
+    "search",
+    "research",
+    "web",
+    "pi-protocol"
+  ],
+  "license": "MIT",
+  "scripts": {
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@kyvernitria/pi-protocol-minimal": "file:../../pi-protocol/packages/pi-protocol-minimal",
+    "@mozilla/readability": "^0.6.0",
+    "linkedom": "^0.18.12",
+    "turndown": "^7.2.4",
+    "unpdf": "^1.6.2"
+  },
+  "peerDependencies": {
+    "@earendil-works/pi-coding-agent": "*",
+    "typebox": "*"
+  },
+  "peerDependenciesMeta": {
+    "@kyvernitria/pi-protocol-minimal": {
+      "optional": true
+    }
+  },
+  "devDependencies": {
+    "@earendil-works/pi-coding-agent": "*",
+    "@types/node": "^26.0.1",
+    "@types/turndown": "^5.0.6",
+    "typebox": "^1.1.34",
+    "typescript": "^5.0.0"
+  },
+  "pi": {
+    "extensions": [
+      "./extension.ts"
+    ]
+  },
+  "files": [
+    "index.ts",
+    "extension.ts",
+    "src",
+    "protocol",
+    "skills",
+    "pi.protocol.json",
+    "README.md"
+  ],
+  "peerDependenciesMeta": {
+    "@kyvernitria/pi-protocol-minimal": {
+      "optional": true
+    }
+  }
+}
