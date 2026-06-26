@@ -1,12 +1,73 @@
+/**
+ * Protocol handlers for pi-search-extension.
+ *
+ * Uses lazy dynamic imports for implementation modules so the extension loads
+ * without error even when node_modules are not installed.
+ * Dependencies are only resolved when a provide is actually invoked.
+ */
+
 import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { registerWebSearchTools, type SearchOptions } from "../src/tools.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
 type ProtocolInvocationContext = { abortSignal?: AbortSignal };
 type ProtocolHandler = (input: unknown, context?: ProtocolInvocationContext) => unknown | Promise<unknown>;
+
+const PROTOCOL_TOOL_NAMES = [
+	"web_search",
+	"polite_search",
+	"web_extract",
+	"fetch_content",
+	"code_search",
+	"research_checkpoint",
+] as const;
+
+const PROTOCOL_PROVIDE_NAMES = [
+	...PROTOCOL_TOOL_NAMES,
+	"deep_research",
+] as const;
+
+type ProtocolToolName = (typeof PROTOCOL_TOOL_NAMES)[number];
+type ProtocolProvideName = (typeof PROTOCOL_PROVIDE_NAMES)[number];
+
+export interface CreateSearchProtocolHandlersOptions {}
+
+export function createHandlers(options?: CreateSearchProtocolHandlersOptions): Record<ProtocolProvideName, ProtocolHandler> {
+	const handlers = {} as Record<ProtocolProvideName, ProtocolHandler>;
+
+	for (const name of PROTOCOL_TOOL_NAMES) {
+		handlers[name] = async (input: unknown, context?: ProtocolInvocationContext) => {
+			// Lazily build the tool map only on first invocation
+			const tools = await getToolMap();
+			const tool = tools.get(name);
+			if (!tool) throw new Error(`pi-search-extension protocol tool not registered: ${name}`);
+
+			const result = await tool.execute(`protocol:${name}`, input ?? {}, context?.abortSignal, undefined, {
+				protocol: true,
+			});
+			return normalizeToolResult(result);
+		};
+	}
+
+	handlers.deep_research = async (input: unknown) => createDeepResearchProtocolResponse(input);
+
+	return handlers;
+}
+
+/**
+ * Lazily builds and caches the tool map. The actual tool registration
+ * (which pulls in heavy search provider deps) happens on first provide call.
+ */
+let toolMapPromise: Promise<Map<string, RegisteredTool>> | undefined;
+
+async function getToolMap(): Promise<Map<string, RegisteredTool>> {
+	if (!toolMapPromise) {
+		toolMapPromise = buildToolMap();
+	}
+	return toolMapPromise;
+}
 
 type PiToolResult = {
 	details?: Record<string, unknown>;
@@ -30,47 +91,7 @@ type ToolRegistryTarget = {
 	registerTool(tool: RegisteredTool): void;
 };
 
-const PROTOCOL_TOOL_NAMES = [
-	"web_search",
-	"polite_search",
-	"web_extract",
-	"fetch_content",
-	"code_search",
-	"research_checkpoint",
-] as const;
-
-const PROTOCOL_PROVIDE_NAMES = [
-	...PROTOCOL_TOOL_NAMES,
-	"deep_research",
-] as const;
-
-type ProtocolToolName = (typeof PROTOCOL_TOOL_NAMES)[number];
-type ProtocolProvideName = (typeof PROTOCOL_PROVIDE_NAMES)[number];
-
-export interface CreateSearchProtocolHandlersOptions extends SearchOptions {}
-
-export function createHandlers(options?: CreateSearchProtocolHandlersOptions): Record<ProtocolProvideName, ProtocolHandler> {
-	const tools = buildToolMap(options);
-	const handlers = {} as Record<ProtocolProvideName, ProtocolHandler>;
-
-	for (const name of PROTOCOL_TOOL_NAMES) {
-		handlers[name] = async (input: unknown, context?: ProtocolInvocationContext) => {
-			const tool = tools.get(name);
-			if (!tool) throw new Error(`pi-search-extension protocol tool not registered: ${name}`);
-
-			const result = await tool.execute(`protocol:${name}`, input ?? {}, context?.abortSignal, undefined, {
-				protocol: true,
-			});
-			return normalizeToolResult(result);
-		};
-	}
-
-	handlers.deep_research = async (input: unknown) => createDeepResearchProtocolResponse(input);
-
-	return handlers;
-}
-
-function buildToolMap(options?: CreateSearchProtocolHandlersOptions): Map<string, RegisteredTool> {
+async function buildToolMap(): Promise<Map<string, RegisteredTool>> {
 	const tools = new Map<string, RegisteredTool>();
 	const target: ToolRegistryTarget = {
 		registerTool(tool) {
@@ -78,7 +99,10 @@ function buildToolMap(options?: CreateSearchProtocolHandlersOptions): Map<string
 		},
 	};
 
-	registerWebSearchTools(target as never, options);
+	// Dynamic import defers loading of tools.ts (and its heavy provider deps)
+	// until the first protocol provide call.
+	const { registerWebSearchTools } = await import("../src/tools.js");
+	registerWebSearchTools(target as never);
 	return tools;
 }
 
