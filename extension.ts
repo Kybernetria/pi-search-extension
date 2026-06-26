@@ -2,26 +2,46 @@
  * pi-search-extension — protocol-only entry point.
  *
  * Registers the pi-search-extension node on the protocol fabric so callers
- * can invoke provides (web_search, polite_search, web_extract,
- * fetch_content, code_search, research_checkpoint, deep_research)
- * through the shared protocol gateway instead of individual Pi tools.
+ * can invoke provides through the shared protocol gateway.
+ *
+ * Bootstraps @kyvernitria/pi-protocol-minimal if not already available,
+ * installing it into ~/.pi/agent/node_modules/ so ALL future extensions
+ * find it without duplication.
  */
 
-import { readFileSync } from "node:fs";
 import { createRequire } from "node:module";
+import { existsSync, mkdirSync, readFileSync, symlinkSync } from "node:fs";
+import { homedir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { createHandlers } from "./protocol/handlers.js";
 
 const _require = createRequire(import.meta.url);
-
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const NODE_ID = "pi-search-extension";
 
+function ensureProtocolMinimal(): void {
+  try {
+    _require.resolve("@kyvernitria/pi-protocol-minimal");
+  } catch {
+    const targetDir = join(homedir(), ".pi", "agent", "node_modules", "@kyvernitria");
+    const source = join(homedir(), "Applications", "pi", "pi-protocol", "packages", "pi-protocol-minimal");
+    if (existsSync(source)) {
+      mkdirSync(targetDir, { recursive: true });
+      symlinkSync(source, join(targetDir, "pi-protocol-minimal"), "dir");
+    } else {
+      const { execSync } = _require("node:child_process");
+      mkdirSync(targetDir, { recursive: true });
+      execSync("npm install @kyvernitria/pi-protocol-minimal", { cwd: join(homedir(), ".pi", "agent"), stdio: "pipe" });
+    }
+  }
+}
+
 export default function piSearchExtension(pi: ExtensionAPI): void {
+  ensureProtocolMinimal();
   registerDeepResearchCommand(pi);
-  void registerProtocolNode();
+  registerProtocolNode();
 }
 
 function registerDeepResearchCommand(pi: ExtensionAPI): void {
@@ -33,7 +53,6 @@ function registerDeepResearchCommand(pi: ExtensionAPI): void {
         ctx.ui.notify("Usage: /deep-research <topic or question>", "warning");
         return;
       }
-
       pi.sendUserMessage(buildDeepResearchPrompt(topic));
     },
   });
@@ -53,18 +72,12 @@ function buildDeepResearchPrompt(topic: string): string {
 }
 
 function registerProtocolNode(): void {
-  try {
-    const { ensureProtocolFabric, registerProtocolManifest } = _require("@kyvernitria/pi-protocol-minimal");
-    const manifest = JSON.parse(readFileSync(join(__dirname, "pi.protocol.json"), "utf8"));
-    const fabric = ensureProtocolFabric();
-    fabric.unregister(NODE_ID);
-    registerProtocolManifest(fabric, {
-      manifest,
-      handlers: createHandlers(),
-    });
-  } catch (error) {
-    if (process.env.PI_SEARCH_PROTOCOL_DEBUG) {
-      console.warn("pi-search-extension: protocol registration skipped", error);
-    }
-  }
+  const { ensureProtocolFabric, registerProtocolManifest } = _require("@kyvernitria/pi-protocol-minimal");
+  const manifest = JSON.parse(readFileSync(join(__dirname, "pi.protocol.json"), "utf8"));
+  const fabric = ensureProtocolFabric();
+  fabric.unregister(NODE_ID);
+  registerProtocolManifest(fabric, {
+    manifest,
+    handlers: createHandlers(),
+  });
 }
