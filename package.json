@@ -1,7 +1,7 @@
 {
   "name": "pi-search-extension",
   "version": "0.1.0",
-  "description": "Pi extension for web search, content extraction, code/docs search, and structured research workflows.",
+  "description": "Minimal private-first Pi extension for web search, local content extraction, and cached content retrieval.",
   "type": "module",
   "main": "./extension.ts",
   "exports": {
@@ -14,7 +14,7 @@
     "pi-package",
     "pi",
     "search",
-    "research",
+    "minimal",
     "web",
     "pi-protocol"
   ],
@@ -23,7 +23,7 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@kyvernitria/pi-protocol-minimal": "file:../../pi-protocol/packages/pi-protocol-minimal",
+    "@kybernetria/pi-protocol": "file:../../pi-protocol/packages/pi-protocol",
     "@mozilla/readability": "^0.6.0",
     "linkedom": "^0.18.12",
     "turndown": "^7.2.4",
@@ -50,7 +50,7 @@
     "extension.ts",
     "src",
     "protocol",
-    "skills",
+    "archive",
     "pi.protocol.json",
     "README.md"
   ]

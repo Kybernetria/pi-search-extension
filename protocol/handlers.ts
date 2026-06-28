@@ -6,27 +6,18 @@
  * Dependencies are only resolved when a provide is actually invoked.
  */
 
-import { readFileSync } from "node:fs";
-import { dirname, join } from "node:path";
-import { fileURLToPath } from "node:url";
-
-const __dirname = dirname(fileURLToPath(import.meta.url));
 
 type ProtocolInvocationContext = { abortSignal?: AbortSignal };
 type ProtocolHandler = (input: unknown, context?: ProtocolInvocationContext) => unknown | Promise<unknown>;
 
 const PROTOCOL_TOOL_NAMES = [
 	"web_search",
-	"polite_search",
-	"web_extract",
 	"fetch_content",
-	"code_search",
-	"research_checkpoint",
+	"get_cached_content",
 ] as const;
 
 const PROTOCOL_PROVIDE_NAMES = [
 	...PROTOCOL_TOOL_NAMES,
-	"deep_research",
 ] as const;
 
 type ProtocolToolName = (typeof PROTOCOL_TOOL_NAMES)[number];
@@ -50,8 +41,6 @@ export function createHandlers(options?: CreateSearchProtocolHandlersOptions): R
 			return normalizeToolResult(result);
 		};
 	}
-
-	handlers.deep_research = async (input: unknown) => createDeepResearchProtocolResponse(input);
 
 	return handlers;
 }
@@ -113,44 +102,15 @@ function normalizeToolResult(result: PiToolResult): Record<string, unknown> {
 		.filter(Boolean)
 		.join("\n\n");
 
+	// Keep protocol output compact. The protocol UI already shows the returned
+	// object, so echoing both `content` and `details` makes search results noisy.
+	// Tools should put human output in text; details are available only when the
+	// tool intentionally returns meaningful structured data and the caller asks
+	// through direct tool APIs rather than this compact protocol surface.
 	return {
 		ok: !result.isError,
 		isError: !!result.isError,
 		text,
-		content,
-		details: result.details ?? {},
 	};
 }
 
-function createDeepResearchProtocolResponse(input: unknown): Record<string, unknown> {
-	const topic = extractDeepResearchTopic(input);
-	const instructions = readFileSync(join(__dirname, "../skills/pi-deep-research/SKILL.md"), "utf8");
-	const prompt = [
-		"Use the following deep-research workflow instructions for this request.",
-		"This protocol provide returns the workflow prompt; caller agents should run it with the registered search/checkpoint provides.",
-		"",
-		instructions,
-		"",
-		"---",
-		`Research request: ${topic}`,
-	].join("\n");
-
-	return {
-		ok: true,
-		text: prompt,
-		prompt,
-		topic,
-		toolProvides: [...PROTOCOL_TOOL_NAMES],
-	};
-}
-
-function extractDeepResearchTopic(input: unknown): string {
-	if (typeof input === "string") return input;
-	if (input && typeof input === "object") {
-		const obj = input as Record<string, unknown>;
-		if (typeof obj.topic === "string") return obj.topic;
-		if (typeof obj.query === "string") return obj.query;
-		if (typeof obj.request === "string") return obj.request;
-	}
-	return "unspecified research topic";
-}

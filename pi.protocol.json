@@ -2,140 +2,36 @@
   "protocolVersion": "0.2.0",
   "nodeId": "pi-search-extension",
   "packageId": "pi-search-extension",
-  "version": "0.1.0",
-  "purpose": "Standalone Pi web/code search and research helpers with provider fallback, page extraction, and research checkpointing.",
-  "tags": ["pi", "search", "web", "code", "research"],
+  "version": "0.2.0",
+  "purpose": "Minimal private-first web search, local content extraction, and local content cache for Pi agents.",
+  "tags": ["pi", "search", "web", "minimal", "privacy"],
   "provides": [
     {
       "name": "web_search",
-      "description": "Search the web for information. Supports single query or up to five parallel queries. Multi-provider cascade: Tavily → Exa → Brave → SerpAPI; unconfigured providers are skipped.",
-      "tags": ["search", "web", "research"],
+      "description": "Minimal web search. Uses configured SearXNG endpoint first; optional Brave fallback. No Exa/Perplexity/OpenAI by default.",
+      "tags": ["search", "web"],
       "effects": ["network"],
-      "inputSchema": {
-        "type": "object",
-        "properties": {
-          "query": { "type": "string", "description": "Single search query." },
-          "queries": { "type": "array", "items": { "type": "string" }, "description": "Multiple queries to search in parallel, max 5." },
-          "max_results": { "type": "number", "description": "Max results per query, default 5, max 10." },
-          "search_depth": { "type": "string", "description": "basic or advanced; advanced is Tavily-specific." },
-          "include_domains": { "type": "array", "items": { "type": "string" } },
-          "exclude_domains": { "type": "array", "items": { "type": "string" } },
-          "provider": { "type": "string", "enum": ["tavily", "exa", "brave", "serpapi"], "description": "Force one provider; omit for automatic cascade." }
-        }
-      },
+      "inputSchema": { "type": "object", "properties": { "query": { "type": "string" }, "queries": { "type": "array", "items": { "type": "string" } }, "max_results": { "type": "number" }, "provider": { "type": "string", "enum": ["searxng", "brave"] } } },
       "outputSchema": { "type": "object" },
       "execution": { "type": "handler", "handler": "web_search" }
     },
     {
-      "name": "polite_search",
-      "description": "Rate-limited synthesized search for extended research. Cascade: Perplexity → Exa answer → OpenRouter → local greedy_search fallback. Returns cited prose when a provider is available.",
-      "tags": ["search", "web", "research", "rate-limited"],
-      "effects": ["network"],
-      "inputSchema": {
-        "type": "object",
-        "required": ["query"],
-        "properties": {
-          "query": { "type": "string", "description": "Search query." },
-          "depth": { "type": "string", "enum": ["fast", "standard", "deep"], "description": "Controls citation detail and follow-up suggestions." }
-        }
-      },
-      "outputSchema": { "type": "object" },
-      "execution": { "type": "handler", "handler": "polite_search" }
-    },
-    {
-      "name": "web_extract",
-      "description": "Extract clean markdown from a web page or PDF URL using Readability/PDF extraction with Jina fallback for low-quality pages.",
-      "tags": ["search", "web", "extract"],
-      "effects": ["network"],
-      "inputSchema": {
-        "type": "object",
-        "required": ["url"],
-        "properties": { "url": { "type": "string", "description": "URL to extract." } }
-      },
-      "outputSchema": { "type": "object" },
-      "execution": { "type": "handler", "handler": "web_extract" }
-    },
-    {
       "name": "fetch_content",
-      "description": "Advanced content extraction with method, fallback, quality, and metadata details for a URL or PDF.",
-      "tags": ["search", "web", "extract"],
-      "effects": ["network"],
-      "inputSchema": {
-        "type": "object",
-        "required": ["url"],
-        "properties": {
-          "url": { "type": "string", "description": "URL to fetch and extract." },
-          "quality_threshold": { "type": "number", "description": "Fallback threshold 0-100; default 50." },
-          "force_jina": { "type": "boolean", "description": "Force Jina extraction even when primary extraction succeeds." }
-        }
-      },
+      "description": "Fetch and locally extract readable content from a URL or PDF. Jina fallback is opt-in only. Stores full result in local cache.",
+      "tags": ["web", "extract", "cache"],
+      "effects": ["network", "filesystem"],
+      "inputSchema": { "type": "object", "required": ["url"], "properties": { "url": { "type": "string" }, "quality_threshold": { "type": "number" }, "force_jina": { "type": "boolean" }, "max_chars": { "type": "number" } } },
       "outputSchema": { "type": "object" },
       "execution": { "type": "handler", "handler": "fetch_content" }
     },
     {
-      "name": "code_search",
-      "description": "Search code examples, API references, official docs, GitHub examples, and debugging sources. Uses Exa when EXA_API_KEY is configured.",
-      "tags": ["search", "code", "docs", "research"],
-      "effects": ["network"],
-      "inputSchema": {
-        "type": "object",
-        "required": ["query"],
-        "properties": {
-          "query": { "type": "string", "description": "Programming question, API, library, or debugging topic." },
-          "maxTokens": { "type": "integer", "description": "Maximum tokens of source context; default 5000." }
-        }
-      },
+      "name": "get_cached_content",
+      "description": "Retrieve locally cached content by id or URL with offset/length slicing.",
+      "tags": ["cache", "content"],
+      "effects": ["filesystem"],
+      "inputSchema": { "type": "object", "properties": { "id": { "type": "string" }, "url": { "type": "string" }, "start": { "type": "number" }, "max_chars": { "type": "number" } } },
       "outputSchema": { "type": "object" },
-      "execution": { "type": "handler", "handler": "code_search" }
-    },
-    {
-      "name": "research_checkpoint",
-      "description": "Evaluate deep-research progress after each search round and return a CONTINUE or PROCEED verdict.",
-      "tags": ["research", "checkpoint"],
-      "effects": [],
-      "inputSchema": {
-        "type": "object",
-        "required": ["depth", "round", "sub_questions", "total_sources"],
-        "properties": {
-          "depth": { "type": "string", "enum": ["quick", "standard", "deep", "exhaustive"] },
-          "round": { "type": "number" },
-          "sub_questions": {
-            "type": "array",
-            "items": {
-              "type": "object",
-              "required": ["question", "answered", "confidence", "source_count", "best_source_tier"],
-              "properties": {
-                "question": { "type": "string" },
-                "answered": { "type": "boolean" },
-                "confidence": { "type": "number" },
-                "source_count": { "type": "number" },
-                "best_source_tier": { "type": "number" }
-              }
-            }
-          },
-          "total_sources": { "type": "number" },
-          "contradictions": { "type": "array", "items": { "type": "string" } },
-          "gaps": { "type": "array", "items": { "type": "string" } }
-        }
-      },
-      "outputSchema": { "type": "object" },
-      "execution": { "type": "handler", "handler": "research_checkpoint" }
-    },
-    {
-      "name": "deep_research",
-      "description": "Return the deep-research workflow prompt for a topic. Caller agents should execute the workflow with web_search, polite_search, web_extract/fetch_content, code_search, and research_checkpoint provides.",
-      "tags": ["research", "workflow", "prompt"],
-      "effects": [],
-      "inputSchema": {
-        "type": "object",
-        "properties": {
-          "topic": { "type": "string", "description": "Research topic or question." },
-          "query": { "type": "string", "description": "Alias for topic." },
-          "request": { "type": "string", "description": "Alias for topic." }
-        }
-      },
-      "outputSchema": { "type": "object" },
-      "execution": { "type": "handler", "handler": "deep_research" }
+      "execution": { "type": "handler", "handler": "get_cached_content" }
     }
   ]
 }

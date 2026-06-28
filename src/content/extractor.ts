@@ -344,6 +344,8 @@ export interface FetchContentOptions {
 	qualityThreshold?: number;
 	/** Force Jina fallback even if primary extraction succeeds */
 	forceJina?: boolean;
+	/** Allow Jina fallback. Default: process.env.JINA_ENABLED === "true" */
+	allowJina?: boolean;
 	/** Timeout in milliseconds (default 15000) */
 	timeout?: number;
 }
@@ -497,26 +499,12 @@ export async function fetchContent(
 	const {
 		qualityThreshold = 50,
 		forceJina = false,
+		allowJina = process.env.JINA_ENABLED === "true",
 		timeout = 15_000,
 	} = options;
 
-	// If Jina forced, use it directly
+	// Jina is third-party. Only use it when explicitly enabled/forced.
 	if (forceJina) {
-		return extractViaJina(url);
-	}
-
-	// ── GitHub ────────────────────────────────────────────────────────────
-	if (parseGitHubUrl(url)) {
-		const ghResult = await extractGitHub(url);
-		if (ghResult) return ghResult;
-		// fall through to Jina on failure
-		return extractViaJina(url);
-	}
-
-	// ── YouTube ───────────────────────────────────────────────────────────
-	if (parseYouTubeVideoId(url)) {
-		const ytResult = await extractYouTube(url);
-		if (ytResult) return ytResult;
 		return extractViaJina(url);
 	}
 
@@ -546,13 +534,9 @@ export async function fetchContent(
 			const result = await extractFromPdf(buffer, url);
 			
 			// Check if we should fallback to Jina for poor PDF extraction
-			if (shouldUseFallback(result.quality, qualityThreshold)) {
-				try {
-					return await extractViaJina(url);
-				} catch {
-					// If Jina fails, return the PDF result anyway
-					return result;
-				}
+			if (allowJina && shouldUseFallback(result.quality, qualityThreshold)) {
+				try { return await extractViaJina(url); }
+				catch { return result; }
 			}
 			
 			return result;
@@ -568,27 +552,23 @@ export async function fetchContent(
 			return readabilityResult;
 		}
 		
-		// Readability failed or poor quality - try Jina fallback
-		try {
-			return await extractViaJina(url);
-		} catch (jinaError) {
-			// Jina failed - return best available result
-			if (readabilityResult) {
-				return { ...readabilityResult, usedFallback: true };
-			}
-			
-			// Last resort: direct extraction
-			return extractDirect(html, url);
+		// Readability failed or poor quality - try Jina only when enabled.
+		if (allowJina) {
+			try { return await extractViaJina(url); }
+			catch { /* use best local result below */ }
 		}
+		if (readabilityResult) return { ...readabilityResult, usedFallback: false };
+		return extractDirect(html, url);
 	} catch (error) {
-		// Network error or fetch failed - try Jina as last resort
-		try {
-			return await extractViaJina(url);
-		} catch (jinaError) {
-			throw new Error(
-				`All extraction methods failed. Primary: ${error instanceof Error ? error.message : String(error)}, ` +
-				`Jina: ${jinaError instanceof Error ? jinaError.message : String(jinaError)}`
-			);
+		if (allowJina) {
+			try { return await extractViaJina(url); }
+			catch (jinaError) {
+				throw new Error(
+					`All extraction methods failed. Primary: ${error instanceof Error ? error.message : String(error)}, ` +
+					`Jina: ${jinaError instanceof Error ? jinaError.message : String(jinaError)}`
+				);
+			}
 		}
+		throw new Error(`Local extraction failed: ${error instanceof Error ? error.message : String(error)}. Set JINA_ENABLED=true to allow third-party fallback.`);
 	}
 }

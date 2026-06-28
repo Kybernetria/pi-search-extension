@@ -1,5 +1,5 @@
 node_modules/
+.pi-search-cache/
+.searxng/
 dist/
-coverage/
-*.tsbuildinfo
-.pi/
+.env
